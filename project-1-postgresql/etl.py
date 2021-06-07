@@ -2,6 +2,7 @@ import os
 import glob
 import psycopg2
 import pandas as pd
+import numpy as np
 from sql_queries import *
 
 
@@ -11,6 +12,12 @@ def process_song_file(cur, filepath):
     """
     # open song file
     df = pd.read_json(filepath, lines=True)
+    
+    # replace whitespace with np.nan
+    df = df.replace(r'^\s*$', np.nan, regex=True)
+    
+    # convert null types to None so they will go to database as NULL
+    df = df.mask(df.isnull(), None)
 
     # insert song record
     song_data = df.loc[:, ["song_id", "title", "artist_id", "year", "duration"]].values.tolist()[0]
@@ -48,8 +55,10 @@ def process_log_file(cur, filepath):
     user_df = df.loc[:, ["userId", "firstName", "lastName", "gender", "level"]].drop_duplicates()
 
     # insert user records
+    attribute_names = ("user_id", "first_name", "last_name", "gender", "level")
     for i, row in user_df.iterrows():
-        cur.execute(user_table_insert, row)
+        row_dict = {attribute_names[i]: x for i, x in enumerate(row)}  # allow for named arguments in query
+        cur.execute(user_table_insert, row_dict)
 
     # insert songplay records
     for index, row in df.iterrows():
